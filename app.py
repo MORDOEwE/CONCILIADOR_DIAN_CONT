@@ -1,67 +1,148 @@
 import streamlit as st
 import pandas as pd
 import io
-import engine  # Importamos tu lógica del otro archivo
+import engine  # Tu archivo de lógica (asegúrate de que engine.py esté en la misma carpeta)
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Conciliador DIAN Netsuite", page_icon="📊", layout="wide")
+st.set_page_config(
+    page_title="Conciliador Fiscal",
+    page_icon="🟣",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# ESTILOS CSS (Tus colores Morado Cabify)
+# --- INYECCIÓN DE CSS (ESTILO VISUAL) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #F8F9FA; }
-    div.stButton > button:first-child {
-        background-color: #7145D6;
+    /* 1. FONDO GENERAL */
+    .stApp {
+        background-color: #F4F6F9;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* 2. ESTILO DEL BOTÓN PRINCIPAL */
+    div.stButton > button {
+        background: linear-gradient(90deg, #7145D6 0%, #5633A8 100%);
         color: white;
-        border-radius: 8px;
-        height: 3em;
-        width: 100%;
         border: none;
+        padding: 15px 32px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
         font-weight: bold;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 12px;
+        width: 100%;
+        box-shadow: 0 4px 14px 0 rgba(113, 69, 214, 0.39);
+        transition: transform 0.2s ease-in-out;
     }
-    div.stButton > button:first-child:hover {
-        background-color: #5a37ab;
+    div.stButton > button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 6px 20px 0 rgba(113, 69, 214, 0.50);
         color: white;
     }
-    .stDownloadButton > button {
-        background-color: #28a745;
-        color: white;
-        border-radius: 8px;
+
+    /* 3. ESTILO DE LOS SUBIDORES DE ARCHIVO (File Uploader) */
+    div[data-testid="stFileUploader"] {
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        border: 1px solid #E0E0E0;
     }
-    h1 { color: #7145D6; }
+    
+    /* 4. TÍTULOS DE SECCIÓN */
+    .section-header {
+        color: #4A4A4A;
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 10px;
+        border-left: 5px solid #7145D6;
+        padding-left: 10px;
+    }
+
+    /* 5. MENSAJES DE ÉXITO/ERROR */
+    .stAlert {
+        border-radius: 10px;
+    }
+    
+    /* Ocultar menú de hamburguesa y footer por defecto */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- HEADER ---
-st.title("💜 Conciliador Contable: DIAN vs Netsuite")
-st.markdown("---")
+# --- ENCABEZADO PERSONALIZADO CON HTML ---
+st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #7145D6 0%, #9C7FE4 100%);
+        padding: 30px;
+        border-radius: 0 0 20px 20px;
+        margin-bottom: 30px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    ">
+        <h1 style="color: white; margin:0; font-size: 2.5rem;">🟣 Conciliador Fiscal</h1>
+        <p style="color: #E0E0E0; margin-top: 5px; font-size: 1.1rem;">
+            Cruce inteligente de datos: DIAN vs ERP Netsuite
+        </p>
+    </div>
+""", unsafe_allow_html=True)
 
-# --- INPUTS (Columnas) ---
-col1, col2 = st.columns(2)
+# --- CONTENEDOR PRINCIPAL ---
+main_container = st.container()
 
-with col1:
-    st.subheader("📁 Archivos DIAN / Gosocket")
-    file_dian = st.file_uploader("Cargar Excel DIAN", type=["xlsx", "xls"])
-    file_rec = st.file_uploader("Gosocket Recibidos (Opcional)", type=["xlsx", "xls"])
+with main_container:
+    col1, col2 = st.columns([1, 1], gap="large")
 
-with col2:
-    st.subheader("📚 Archivos Contables")
-    file_cont = st.file_uploader("Cargar Contabilidad Unificada", type=["xlsx", "xls"])
-    file_emi = st.file_uploader("Gosocket Emitidos (Opcional)", type=["xlsx", "xls"])
+    # --- COLUMNA IZQUIERDA: DIAN ---
+    with col1:
+        st.markdown('<div class="section-header">📂 Documentos Fiscales (DIAN)</div>', unsafe_allow_html=True)
+        
+        # Usamos un container para agrupar visualmente
+        with st.container():
+            st.info("Obligatorio: Sube aquí el reporte descargado de la DIAN.")
+            file_dian = st.file_uploader("Cargar Excel DIAN", type=["xlsx", "xls"], key="dian")
+            
+            st.markdown("---")
+            st.caption("Opcional: Si tienes facturas de Gosocket")
+            file_rec = st.file_uploader("Gosocket Recibidos", type=["xlsx", "xls"], key="rec")
 
-# --- LÓGICA DE PROCESO ---
+    # --- COLUMNA DERECHA: CONTABILIDAD ---
+    with col2:
+        st.markdown('<div class="section-header">📊 Documentos Internos (Netsuite)</div>', unsafe_allow_html=True)
+        
+        with st.container():
+            st.warning("Obligatorio: Sube el auxiliar contable unificado.")
+            file_cont = st.file_uploader("Cargar Contabilidad", type=["xlsx", "xls"], key="cont")
+            
+            st.markdown("---")
+            st.caption("Opcional: Si emites facturación electrónica externa")
+            file_emi = st.file_uploader("Gosocket Emitidos", type=["xlsx", "xls"], key="emi")
+
+# --- BOTÓN DE ACCIÓN CENTRADO ---
 st.markdown("###")
-if st.button("INICIAR PROCESO DE CONCILIACIÓN"):
+col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
+
+with col_b2:
+    # El botón ocupa el ancho de la columna central gracias al CSS
+    process_btn = st.button("🚀  EJECUTAR CONCILIACIÓN AUTOMÁTICA")
+
+# --- LÓGICA DE PROCESAMIENTO ---
+if process_btn:
     if not file_dian or not file_cont:
-        st.error("⚠️ Error: Debes cargar obligatoriamente el archivo DIAN y la Contabilidad.")
+        st.error("⚠️  ¡Atención! Faltan archivos obligatorios. Por favor carga el **Excel de la DIAN** y la **Contabilidad**.")
     else:
-        status_text = st.empty()
+        # Placeholder para mensajes de estado con estilo
+        status_box = st.empty()
         progress_bar = st.progress(0)
         
         try:
             # 1. LECTURA
-            status_text.info("Leyendo archivo DIAN...")
-            progress_bar.progress(10)
+            status_box.markdown("🔄 **Leyendo y normalizando datos de la DIAN...**")
+            progress_bar.progress(15)
             df_dian_raw = engine.leer_dian(file_dian)
             df_dian_raw = engine.crear_llave_conciliacion(df_dian_raw)
             
@@ -69,12 +150,12 @@ if st.button("INICIAR PROCESO DE CONCILIACIÓN"):
             df_dian_gastos = engine.filtrar_dian_gastos(df_dian_raw)
             df_dian_ingresos = engine.filtrar_dian_ingresos(df_dian_raw)
             
-            status_text.info("Leyendo Contabilidad (esto puede tardar un poco)...")
-            progress_bar.progress(30)
+            status_box.markdown("🔄 **Procesando contabilidad Netsuite (esto puede tardar unos segundos)...**")
+            progress_bar.progress(35)
             df_cont_full = engine.leer_contabilidad_completa(file_cont)
             
             if df_cont_full is None:
-                st.error("Error leyendo contabilidad. Revisa el formato.")
+                st.error("❌ Error leyendo el archivo contable. Verifica que no esté corrupto.")
                 st.stop()
                 
             # Segregación Contable
@@ -88,8 +169,8 @@ if st.button("INICIAR PROCESO DE CONCILIACIÓN"):
             df_emi = engine.leer_gosocket(file_emi)
             
             # 2. PROCESAMIENTO
-            status_text.info("Realizando cruces de datos...")
-            progress_bar.progress(50)
+            status_box.markdown("⚙️ **Cruzando bases de datos y calculando diferencias...**")
+            progress_bar.progress(60)
             
             # Gastos
             c_gas, sd_gas, sc_gas = engine.ejecutar_conciliacion_universal(df_dian_gastos, df_cont_gastos)
@@ -105,16 +186,19 @@ if st.button("INICIAR PROCESO DE CONCILIACIÓN"):
                 cg_ing, sg_cont, sg_go = engine.conciliar_ingresos_vs_gosocket(df_cont_ingresos, df_emi)
 
             # 3. GENERACIÓN EXCEL
-            status_text.info("Generando archivo Excel con formato...")
-            progress_bar.progress(80)
+            status_box.markdown("📝 **Escribiendo reporte final en Excel...**")
+            progress_bar.progress(85)
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                # Recuperar nombres de columnas DIAN
-                emisor_d = next((c for c in df_dian_raw.columns if 'nombre_emisor' in c), 'Emisor') 
-                receptor_d = next((c for c in df_dian_raw.columns if 'nombre_receptor' in c), 'Receptor')
-                total_d = next((c for c in df_dian_raw.columns if 'total_bruto' in c or 'total' in c), 'Total')
-                iva_d = next((c for c in df_dian_raw.columns if 'iva' in c or 'impuesto' in c), None)
+                # Recuperar nombres de columnas DIAN (Intento seguro)
+                try:
+                    emisor_d = next((c for c in df_dian_raw.columns if 'nombre_emisor' in c), 'Emisor') 
+                    receptor_d = next((c for c in df_dian_raw.columns if 'nombre_receptor' in c), 'Receptor')
+                    total_d = next((c for c in df_dian_raw.columns if 'total_bruto' in c or 'total' in c), 'Total')
+                    iva_d = next((c for c in df_dian_raw.columns if 'iva' in c or 'impuesto' in c), None)
+                except:
+                    emisor_d, receptor_d, total_d, iva_d = 'Emisor', 'Receptor', 'Total', 'IVA'
 
                 # Reportes
                 engine.procesar_reporte_cabify_generico(c_gas, sd_gas, sc_gas, writer, '1. Conciliacion Gastos', emisor_d, total_d, iva_d, False)
@@ -136,16 +220,17 @@ if st.button("INICIAR PROCESO DE CONCILIACIÓN"):
                 engine.formatear_hoja_base(writer, 'Base DIAN', df_dian_raw)
 
             progress_bar.progress(100)
-            status_text.success("✅ ¡Proceso finalizado con éxito!")
+            status_box.success("✅ ¡Proceso finalizado! Descarga tu reporte abajo.")
             
             # 4. DOWNLOAD BUTTON
+            st.markdown("###")
             st.download_button(
-                label="📥 Descargar Reporte Final (Excel)",
+                label="📥  DESCARGAR REPORTE EXCEL FINAL",
                 data=output.getvalue(),
                 file_name="Reporte_Conciliacion_Final.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
         except Exception as e:
-            st.error(f"Ocurrió un error inesperado: {e}")
-            # st.exception(e) # Descomentar para ver el error completo en pantalla si lo necesitas
+            st.error(f"❌ Ocurrió un error inesperado: {e}")
+            # st.exception(e) # Usa esto solo si quieres ver el error técnico en pantalla
