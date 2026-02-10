@@ -140,7 +140,7 @@ st.markdown("###")
 col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
 
 with col_b2:
-    process_btn = st.button("🚀  EJECUTAR CONCILIACIÓN AUTOMÁTICA")
+    process_btn = st.button("EJECUTAR CONCILIACIÓN AUTOMÁTICA")
 
 # --- LÓGICA DE PROCESAMIENTO ---
 if process_btn:
@@ -235,3 +235,4 @@ if process_btn:
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
