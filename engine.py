@@ -1,3 +1,4 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
 import re
@@ -7,18 +8,18 @@ import warnings
 pd.set_option('future.no_silent_downcasting', True)
 warnings.simplefilter("ignore")
 
-# CONSTANTES (Tus colores se usarán en app.py, aquí dejamos las llaves)
+# CONSTANTES
 LLAVE_DIAN_CONT_COL_NAME = 'LLAVE_DIAN'
 LLAVE_SERIE_FOLIO_COL_NAME = 'LLAVE_SERIE_FOLIO'
 
-# COLORES PARA EXCEL (Necesarios para xlsxwriter)
+# COLORES
 CABIFY_PURPLE = '#7145D6'
 CABIFY_LIGHT  = '#F3F0FA'
 CABIFY_ACCENT = '#B89EF7'
 WHITE         = '#FFFFFF'
 
 # =================================================================
-# 1. UTILIDADES Y LECTURA ADAPTADA PARA WEB
+# 1. UTILIDADES
 # =================================================================
 
 def normalize_col_name(col_name):
@@ -56,14 +57,20 @@ def limpiar_moneda_colombia(valor):
         return float(s)
     except: return 0.0
 
+# =================================================================
+# 2. LECTURA OPTIMIZADA (CACHE + CALAMINE)
+# =================================================================
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def leer_contabilidad_completa(file_obj):
     """
-    Lee el archivo de contabilidad desde un objeto en memoria (Streamlit).
+    Lee contabilidad usando caché. Si el archivo no cambia, no se recalcula.
+    Usamos 'openpyxl' aquí por la complejidad de buscar el encabezado,
+    pero al estar en caché, solo tarda la primera vez.
     """
     if file_obj is None: return None
     try:
         # Pre-lectura para encontrar encabezado
-        # En web, debemos resetear el puntero del archivo si lo leemos dos veces
         file_obj.seek(0) 
         try: df_preview = pd.read_excel(file_obj, nrows=20, header=None, engine='openpyxl')
         except: df_preview = pd.read_excel(file_obj, nrows=20, header=None)
@@ -74,11 +81,11 @@ def leer_contabilidad_completa(file_obj):
             if 'Cuenta' in row_str and 'Fecha' in row_str:
                 header_row = i; break
         
-        # Leemos el archivo real
-        file_obj.seek(0) # Resetear puntero
+        # Lectura real
+        file_obj.seek(0)
         df = pd.read_excel(file_obj, header=header_row, engine='openpyxl')
         
-        # Limpieza básica (Tu lógica original intacta)
+        # Limpieza
         df['Cuenta'] = df['Cuenta'].astype(str).replace(['nan', 'None', ''], np.nan)
         condicion_cabecera = df['Cuenta'].str.match(r'^\d', na=False)
         df['CUENTA_COMPLETA'] = df['Cuenta'].where(condicion_cabecera, other=np.nan).ffill()
@@ -122,26 +129,38 @@ def leer_contabilidad_completa(file_obj):
         print(f"Error: {e}")
         return None
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def leer_dian(file_obj):
+    """Usa el motor CALAMINE (Rust) para máxima velocidad en archivos grandes."""
     if file_obj is None: return None
     try:
+        # AQUÍ ESTÁ EL TRUCO: engine="calamine"
+        df = pd.read_excel(file_obj, engine="calamine", dtype=str)
+        col_map = {col: normalize_col_name(col) for col in df.columns}
+        df.rename(columns=col_map, inplace=True)
+        return df
+    except Exception:
+        # Fallback a openpyxl si calamine falla
+        file_obj.seek(0)
         df = pd.read_excel(file_obj, dtype=str)
         col_map = {col: normalize_col_name(col) for col in df.columns}
         df.rename(columns=col_map, inplace=True)
         return df
-    except: return None
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def leer_gosocket(file_obj):
     if file_obj is None: return None
     try:
-        df = pd.read_excel(file_obj, dtype=str)
+        df = pd.read_excel(file_obj, engine="calamine", dtype=str)
         col_map = {col: normalize_col_name(col) for col in df.columns}
         df.rename(columns=col_map, inplace=True)
         return df
-    except: return None
+    except: 
+        file_obj.seek(0)
+        return pd.read_excel(file_obj, dtype=str)
 
 # =================================================================
-# 2. FILTROS Y MOTORES (Tu lógica original intacta)
+# 3. FILTROS Y MOTORES (Lógica pura)
 # =================================================================
 
 def crear_llave_conciliacion(df):
@@ -159,9 +178,7 @@ def crear_llave_serie_folio(df):
     cols_normalized = df.columns
     series_col = next((c for c in cols_normalized if 'serie' in c or 'prefijo' in c), None)
     folio_col = next((c for c in cols_normalized if 'folio' in c or 'numero' in c), None)
-    
     if not series_col or not folio_col: return df, False
-    
     try:
         df[LLAVE_SERIE_FOLIO_COL_NAME] = (
             df[series_col].astype(str).str.strip() + 
@@ -262,7 +279,7 @@ def conciliar_ingresos_vs_gosocket(df_ingresos, df_gosocket):
     
     if LLAVE_SERIE_FOLIO_COL_NAME not in df_gosocket.columns:
         df_gosocket, _ = crear_llave_serie_folio(df_gosocket)
-        
+    
     if LLAVE_SERIE_FOLIO_COL_NAME not in df_gosocket.columns:
         col_ref = next((c for c in df_gosocket.columns if 'referencia' in c), None)
         if col_ref:
@@ -287,7 +304,7 @@ def conciliar_ingresos_vs_gosocket(df_ingresos, df_gosocket):
     return df_coinc, df_sob_cont, df_sob_go
 
 # =================================================================
-# 3. REPORT GENERATION (LOGIC ONLY)
+# 4. REPORT GENERATION
 # =================================================================
 
 def formato_cabezote_cabify(workbook):
