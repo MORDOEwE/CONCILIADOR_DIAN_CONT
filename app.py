@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
-import engine  # Tu archivo de lógica (asegúrate de que engine.py esté en la misma carpeta)
+import engine  # Tu archivo de lógica
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- INYECCIÓN DE CSS (ESTILO VISUAL) ---
+# --- INYECCIÓN DE CSS (ESTILO VISUAL CORREGIDO) ---
 st.markdown("""
     <style>
     /* 1. FONDO GENERAL */
@@ -19,6 +19,25 @@ st.markdown("""
         background-color: #F4F6F9;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
+
+    /* --- CORRECCIÓN DE COLORES (SOLUCIÓN AL TEXTO INVISIBLE) --- */
+    /* Forzar que todas las etiquetas de los inputs sean oscuras */
+    label[data-testid="stWidgetLabel"] p {
+        color: #31333F !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+    }
+    
+    /* Forzar que el texto dentro de las cajas de carga sea oscuro */
+    div[data-testid="stFileUploader"] small {
+        color: #555555 !important;
+    }
+
+    /* Forzar color oscuro en las alertas (info/warning) */
+    div[data-baseweb="notification"] p, div[data-baseweb="notification"] {
+        color: #31333F !important;
+    }
+    /* --------------------------------------------------------- */
 
     /* 2. ESTILO DEL BOTÓN PRINCIPAL */
     div.stButton > button {
@@ -41,7 +60,7 @@ st.markdown("""
     div.stButton > button:hover {
         transform: scale(1.02);
         box-shadow: 0 6px 20px 0 rgba(113, 69, 214, 0.50);
-        color: white;
+        color: white !important;
     }
 
     /* 3. ESTILO DE LOS SUBIDORES DE ARCHIVO (File Uploader) */
@@ -63,18 +82,13 @@ st.markdown("""
         padding-left: 10px;
     }
 
-    /* 5. MENSAJES DE ÉXITO/ERROR */
-    .stAlert {
-        border-radius: 10px;
-    }
-    
-    /* Ocultar menú de hamburguesa y footer por defecto */
+    /* Ocultar menú de hamburguesa y footer */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- ENCABEZADO PERSONALIZADO CON HTML ---
+# --- ENCABEZADO PERSONALIZADO ---
 st.markdown("""
     <div style="
         background: linear-gradient(135deg, #7145D6 0%, #9C7FE4 100%);
@@ -101,7 +115,6 @@ with main_container:
     with col1:
         st.markdown('<div class="section-header">📂 Documentos Fiscales (DIAN)</div>', unsafe_allow_html=True)
         
-        # Usamos un container para agrupar visualmente
         with st.container():
             st.info("Obligatorio: Sube aquí el reporte descargado de la DIAN.")
             file_dian = st.file_uploader("Cargar Excel DIAN", type=["xlsx", "xls"], key="dian")
@@ -122,12 +135,11 @@ with main_container:
             st.caption("Opcional: Si emites facturación electrónica externa")
             file_emi = st.file_uploader("Gosocket Emitidos", type=["xlsx", "xls"], key="emi")
 
-# --- BOTÓN DE ACCIÓN CENTRADO ---
+# --- BOTÓN DE ACCIÓN ---
 st.markdown("###")
 col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
 
 with col_b2:
-    # El botón ocupa el ancho de la columna central gracias al CSS
     process_btn = st.button("🚀  EJECUTAR CONCILIACIÓN AUTOMÁTICA")
 
 # --- LÓGICA DE PROCESAMIENTO ---
@@ -135,7 +147,6 @@ if process_btn:
     if not file_dian or not file_cont:
         st.error("⚠️  ¡Atención! Faltan archivos obligatorios. Por favor carga el **Excel de la DIAN** y la **Contabilidad**.")
     else:
-        # Placeholder para mensajes de estado con estilo
         status_box = st.empty()
         progress_bar = st.progress(0)
         
@@ -150,48 +161,42 @@ if process_btn:
             df_dian_gastos = engine.filtrar_dian_gastos(df_dian_raw)
             df_dian_ingresos = engine.filtrar_dian_ingresos(df_dian_raw)
             
-            status_box.markdown("🔄 **Procesando contabilidad Netsuite (esto puede tardar unos segundos)...**")
+            status_box.markdown("🔄 **Procesando contabilidad Netsuite...**")
             progress_bar.progress(35)
             df_cont_full = engine.leer_contabilidad_completa(file_cont)
             
             if df_cont_full is None:
-                st.error("❌ Error leyendo el archivo contable. Verifica que no esté corrupto.")
+                st.error("❌ Error leyendo el archivo contable. Verifica el formato.")
                 st.stop()
                 
-            # Segregación Contable
+            # Segregación
             df_cont_gastos = engine.filtrar_solo_gastos(df_cont_full)
             df_cont_ingresos = engine.filtrar_solo_ingresos(df_cont_full)
             df_cont_iva_desc = engine.filtrar_solo_iva_descontable(df_cont_full)
             df_cont_iva_gen = engine.filtrar_solo_iva_generado(df_cont_full)
             
-            # Gosocket
             df_rec = engine.leer_gosocket(file_rec)
             df_emi = engine.leer_gosocket(file_emi)
             
             # 2. PROCESAMIENTO
-            status_box.markdown("⚙️ **Cruzando bases de datos y calculando diferencias...**")
+            status_box.markdown("⚙️ **Cruzando bases de datos...**")
             progress_bar.progress(60)
             
-            # Gastos
             c_gas, sd_gas, sc_gas = engine.ejecutar_conciliacion_universal(df_dian_gastos, df_cont_gastos)
-            # Ingresos
             c_ing, sd_ing, sc_ing = engine.ejecutar_conciliacion_universal(df_dian_ingresos, df_cont_ingresos)
-            # IVA
             c_iva_d, sd_iva_d, sc_iva_d = engine.ejecutar_conciliacion_universal(df_dian_gastos, df_cont_iva_desc)
             c_iva_g, sd_iva_g, sc_iva_g = engine.ejecutar_conciliacion_universal(df_dian_ingresos, df_cont_iva_gen)
             
-            # Gosocket Match
             cg_ing, sg_cont, sg_go = None, None, None
             if df_emi is not None:
                 cg_ing, sg_cont, sg_go = engine.conciliar_ingresos_vs_gosocket(df_cont_ingresos, df_emi)
 
             # 3. GENERACIÓN EXCEL
-            status_box.markdown("📝 **Escribiendo reporte final en Excel...**")
+            status_box.markdown("📝 **Escribiendo reporte final...**")
             progress_bar.progress(85)
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                # Recuperar nombres de columnas DIAN (Intento seguro)
                 try:
                     emisor_d = next((c for c in df_dian_raw.columns if 'nombre_emisor' in c), 'Emisor') 
                     receptor_d = next((c for c in df_dian_raw.columns if 'nombre_receptor' in c), 'Receptor')
@@ -200,7 +205,6 @@ if process_btn:
                 except:
                     emisor_d, receptor_d, total_d, iva_d = 'Emisor', 'Receptor', 'Total', 'IVA'
 
-                # Reportes
                 engine.procesar_reporte_cabify_generico(c_gas, sd_gas, sc_gas, writer, '1. Conciliacion Gastos', emisor_d, total_d, iva_d, False)
                 engine.procesar_reporte_cabify_generico(c_ing, sd_ing, sc_ing, writer, '2. Conciliacion Ingresos', receptor_d, total_d, iva_d, False)
                 
@@ -208,7 +212,6 @@ if process_btn:
                     engine.procesar_reporte_cabify_generico(c_iva_d, sd_iva_d, sc_iva_d, writer, '3. IVA Descontable', emisor_d, iva_d, None, True)
                     engine.procesar_reporte_cabify_generico(c_iva_g, sd_iva_g, sc_iva_g, writer, '3.1 IVA Generado', receptor_d, iva_d, None, True)
 
-                # Bases
                 df_cont_full.to_excel(writer, sheet_name='Base Contable Depurada', index=False)
                 engine.formatear_hoja_base(writer, 'Base Contable Depurada', df_cont_full)
                 
@@ -220,9 +223,8 @@ if process_btn:
                 engine.formatear_hoja_base(writer, 'Base DIAN', df_dian_raw)
 
             progress_bar.progress(100)
-            status_box.success("✅ ¡Proceso finalizado! Descarga tu reporte abajo.")
+            status_box.success("✅ ¡Reporte generado! Descárgalo abajo.")
             
-            # 4. DOWNLOAD BUTTON
             st.markdown("###")
             st.download_button(
                 label="📥  DESCARGAR REPORTE EXCEL FINAL",
@@ -232,5 +234,4 @@ if process_btn:
             )
 
         except Exception as e:
-            st.error(f"❌ Ocurrió un error inesperado: {e}")
-            # st.exception(e) # Usa esto solo si quieres ver el error técnico en pantalla
+            st.error(f"❌ Error: {e}")
