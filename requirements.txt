@@ -2,5 +2,6 @@ streamlit>=1.25.0
 pandas
 xlsxwriter
 openpyxl
+python-calamine
 numpy
 altair<5
